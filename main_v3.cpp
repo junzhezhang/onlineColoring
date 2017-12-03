@@ -526,7 +526,7 @@ int main() {
 
     /// run filename to vec of string
     //string fileName ="cudaMalloc_memInfo_alexnet_1000_mid2.text";
-    string fileName ="memResNet_1tr_0te.text";
+    string fileName ="memAlex_1tr_0te.text";
     vector<string>vec = file_2_strVec(fileName);
     
     /// run allocation
