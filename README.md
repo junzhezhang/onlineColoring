@@ -21,3 +21,4 @@ Pls use /// to navigate through major sections.<br />
     New algorithm able to cut maxLen in case it contains more than 1 iterations.<br />
     Alternative way, use "average velocity" idea to detect trend of the load, which can theoretically reduce to test up to 1 time only. In practice, however, it shows that there are some false alarm if noise is significant, such as AlexNet.<br />
 8. Splitted into header, cpp and main.cpp for test, ready to adapt into Singa for further test.<br />
+## pls read the 3 files ended with vB4
