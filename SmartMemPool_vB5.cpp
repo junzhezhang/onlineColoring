@@ -564,7 +564,7 @@ SmartMemPool::SmartMemPool(string meth){
 }
 
 ///Malloc
-void* SmartMemPool::Malloc(size_t size){
+void SmartMemPool::Malloc(void** ptr, size_t size){
     /*
      1. switch flag when gc == globeCounter, construct lookup table and malloc the whole pool.
      2. if flag=0, malloc/cudaMalloc, collect vec string
@@ -675,7 +675,7 @@ void* SmartMemPool::Malloc(size_t size){
     
     gc++;
     Table_p2s[allocatedPtr]=size;
-    return allocatedPtr;
+    *ptr = allocatedPtr; //TODO(junzhe) verify ptr, allocatedPtr, if pass by reference or not.
 }
 
 ///Free

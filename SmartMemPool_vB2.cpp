@@ -798,7 +798,7 @@ void SmartMemPool::Free(void* ptr){
                 //update load
                 Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second-deallocatedSize);
                 //deallocate and unmark TODO(junzhe) double check what else to be done.
-                Table_r2Ver.find(resp_rIdx)->second.Occupied =1; //freed, able to allocate again.
+                Table_r2Ver.find(resp_rIdx)->second.Occupied =0; //freed, able to allocate again.
             }else{
                 cout<<"error, in freeing the ptr"<<endl;
             }
