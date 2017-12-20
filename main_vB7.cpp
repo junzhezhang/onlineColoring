@@ -55,10 +55,11 @@ int main() {
     SmartMemPool pool("FF");
 
     // get the simulation input from text file, select one for testing.
-    string fileName ="memInfo_alex_20itr_100size.text";
+    //string fileName ="memInfo_alex_20itr_100size.text";
     //string fileName ="memInfo_vgg_20itr_100size.text";
-    //string fileName ="memInfo_resnet_20itr_100size.text";
+    string fileName ="memInfo_resnet_20itr_100size.text";
     vector<string>vec = file_2_strVec(fileName);
+    cout<<"size of vec: "<<vec.size()<<endl;
     cout<<"example of one vec string"<<endl;
     cout<<vec[1]<<endl;
     cout<<vec[45]<<endl;

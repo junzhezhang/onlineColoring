@@ -659,7 +659,7 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
         
         chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-        //cout<<gc<<" condition M1 "<<duration<<endl;
+        cout<<gc<<" condition M1 "<<duration<<endl;
     }else{
         /// 3. if flag=1, look up table, switch back at last iteration.
         int lookupIdx = (gc-location)%maxLen;
@@ -674,7 +674,7 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
                     Vec_r2Ver[lookupIdx].second.last_Occupied=1;
                 }
                 Table_p2r[allocatedPtr]=lookupIdx;
-                //cout<<"condition M2 "<<allocatedPtr<<endl;
+                cout<<"condition M2 "<<allocatedPtr<<endl;
                 //update load
                 if(loadLogFlag==1){
                     Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
@@ -684,7 +684,7 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
                 Vec_r2Ver[lookupIdx].second.Occupied_backup=1;
                 Vec_r2Ver[lookupIdx].second.last_Occupied=2;
                 Table_p2r[allocatedPtr]=lookupIdx;
-                //cout<<"condition M4 "<<endl;
+                cout<<"condition M4 "<<endl;
                 //update load
                 if(loadLogFlag==1){
                     Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
@@ -701,8 +701,18 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
                 
                 cout<<gc<<" condition M3 "<<duration<<' '<<Vec_r2Ver[lookupIdx].second.Occupied<<' '<<Vec_r2Ver[lookupIdx].second.Occupied_backup<<endl;
                 }
-        } //c. end of c
-    }
+        } else{
+            //size not proper or both occupied
+                allocatedPtr = malloc(size);
+                //update load
+                if(loadLogFlag==1){
+                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
+                }
+                cout<<"condition M5"<<endl;
+        }
+    } //c. end of c
+        
+    
     ///4. test repeated sequence every 100 blocks, update globeCounter.
     if (((gc+1)%300==0) && (mallocFlag==0) && (globeCounter==-1)&&(gc+2>checkPoint)){
         cout<<"gc and GC before test: "<<gc<<' '<<globeCounter<<endl;
@@ -753,7 +763,7 @@ void SmartMemPool::Free(void* ptr){
        
         chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-        //cout<<gc<<" condition F1 "<<duration<<endl;
+        cout<<gc<<" condition F1 "<<duration<<endl;
     }else{
         if (!(Table_p2r.find(ptr)==Table_p2r.end())){ //via Table
             int resp_rIdx = Table_p2r.find(ptr)->second;
@@ -763,10 +773,10 @@ void SmartMemPool::Free(void* ptr){
             //c.
             if (ptr == Vec_r2Ver[resp_rIdx].second.ptr){
                 Vec_r2Ver[resp_rIdx].second.Occupied =0; //freed, able to allocate again.
-                //cout<<"condition F2 : primary location"<<endl;
+                cout<<"condition F2 : primary location"<<endl;
             }else if (ptr == (void*)((char*)Vec_r2Ver[resp_rIdx].second.ptr+offsetCrossItr*sizeof(char))){
                 Vec_r2Ver[resp_rIdx].second.Occupied_backup =0; //freed, able to allocate again.
-                //cout<<"condition F4 : backup location"<<endl;
+                cout<<"condition F4 : backup location"<<endl;
          
             }else {
                 if (((float)((char*)ptr-((char*)ptrPool+offsetCrossItr*sizeof(char)))>0) && ((float)((char*)ptr-((char*)ptrPool+2*offsetCrossItr*sizeof(char)))<0)){
@@ -787,7 +797,7 @@ void SmartMemPool::Free(void* ptr){
             free(ptr);
             chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-            //cout<<gc<<" condition F3 "<<duration<<endl;
+            cout<<gc<<" condition F3 "<<duration<<endl;
         }
     }
     gc++;
