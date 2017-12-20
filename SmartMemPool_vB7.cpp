@@ -17,6 +17,7 @@ public:
     size_t size;
     int r; //arrive
     int d; //depart
+    int crossItr =0; //r.
     Vertex(int,size_t,int,int);
     pair<size_t, size_t> colorRange;
     vector<pair<size_t, size_t>> colorOccupied;
@@ -421,7 +422,7 @@ pair<map<int,int>,map<int,int>> cross_itr_durations(vector<string>vec_double, in
 }
 
 /// main run funtion
-vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset,string colorMethod){
+vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset, size_t &offsetCrossItr,string colorMethod){ //c.
     /*
      run function, input vector of strings, return colored vertices,
      update idxRange, offset.
@@ -429,10 +430,17 @@ vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset,string color
      */
     vector<onePieceMsg>onePieceMsgVec_ = strVec_2_pieceMsgVec(vec,idxRange);
     pair<vector<onePairMsg>,vector<onePairMsg>>pairOfPairMsgVec_=pieceMsgVec_2_pairOfPairMsgVec(onePieceMsgVec_,idxRange);
+    //1. normal blocks 2. cross-iteration blocks.
     vector<onePairMsg>pairMsgVec_1 = pairOfPairMsgVec_.first;
     vector<onePairMsg>pairMsgVec_2 = pairOfPairMsgVec_.second;
   
     vector<Vertex>vertices_2 = colorSomeVertices(pairMsgVec_2,offset,colorMethod);
+    //c.
+    for (int i=0; i<vertices_2.size();i++){
+        vertices_2[i].crossItr = 1;
+    }
+    offsetCrossItr = offset;//c.
+    offset = offsetCrossItr*2;//c.
     vector<Vertex>vertices = colorSomeVertices(pairMsgVec_1,offset,colorMethod);
     //merge
     vertices.insert(vertices.end(),vertices_2.begin(),vertices_2.end());
@@ -586,10 +594,10 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
         cout<<"switched to color-malloc"<<endl;
         vector<string>vec_run(&vec[location],&vec[location+maxLen]);
         
-        vector<Vertex>vertices = run(vec_run, idxRange,offset,colorMethod);
+        vector<Vertex>vertices = run(vec_run, idxRange,offset,offsetCrossItr, colorMethod); //c.
 
         //here to verify if the coloring got overlapping. TODO(junzhe) optional
-        //overlap_test(vertices);
+        overlap_test(vertices);
         
         //obtain the cross-iteration duration info
         int doubleRange=0;
@@ -601,23 +609,14 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
         //update ptrPool
         ptrPool = malloc(offset); //poolSize or memory foot print  offset.
         cout<<"ptrPool is: "<<ptrPool<<endl;
-        //3rd map
-        for (int i=0; i<vertices.size(); i++){
-            lookUpElement temp;
-            temp.r_idx =vertices[i].r;
-            temp.d_idx =Table_r2d.find(vertices[i].r)->second;
-            temp.size =vertices[i].size;
-            temp.offset=vertices[i].colorRange.first;
-            temp.ptr = (void*)((char*)ptrPool+temp.offset*sizeof(char));
-            temp.Occupied =0;
-            //build tables for lookup.
-            Table_r2Ver[temp.r_idx]= temp;
-        }
+
         //b.  below 2 loops: vec_r2Ver to replace Table_r2Ver
         for (int i=0; i<idxRange; i++){
             lookUpElement tempElement;
             Vec_r2Ver.push_back(make_pair(i,tempElement));
         }
+        cout<<"now print Vec_r2Ver"<<endl;
+        cout<<"size "<<vertices.size()<<endl;
         for (int i=0; i<vertices.size(); i++){
             lookUpElement temp;
             temp.r_idx =vertices[i].r;
@@ -626,8 +625,11 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
             temp.offset=vertices[i].colorRange.first;
             temp.ptr = (void*)((char*)ptrPool+temp.offset*sizeof(char));
             temp.Occupied =0;
+            temp.crossItr = vertices[i].crossItr; //c.
+            temp.Occupied_backup =0; //c.
             //build tables for lookup.
             Vec_r2Ver[vertices[i].r].second= temp;
+            cout<<vertices[i].r<<' '<<Vec_r2Ver[vertices[i].r].second.r_idx<<' '<<Vec_r2Ver[vertices[i].r].second.d_idx<<' '<<Vec_r2Ver[vertices[i].r].second.crossItr<<endl;
         }
         
     }
@@ -662,35 +664,45 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
         /// 3. if flag=1, look up table, switch back at last iteration.
         int lookupIdx = (gc-location)%maxLen;
         //b.
-        if ((Vec_r2Ver[lookupIdx].second.size ==size) && (Vec_r2Ver[lookupIdx].second.Occupied==0)){
-            allocatedPtr = Vec_r2Ver[lookupIdx].second.ptr;
-            Vec_r2Ver[lookupIdx].second.Occupied= 1;
-            Table_p2r[allocatedPtr]=lookupIdx;
-            //update load
-            if(loadLogFlag==1){
-                Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
-            }
-            //cout<<gc<<" allocate "<<allocatedPtr<<" in the mem-pool"<<endl;
-            chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-           
-            //cout<<gc<<" condition M2 "<<duration<<endl;
-        }else {
-        
-            //size not proper or occupied
-            allocatedPtr = malloc(size);
-            //update load
-            if(loadLogFlag==1){
-                Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
-            }
-            chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-            
-            //cout<<gc<<" condition M3 "<<duration<<endl;
-             
-        }
+        //c. designed below loop, till the end.
+        if ((Vec_r2Ver[lookupIdx].second.size ==size)&&(Vec_r2Ver[lookupIdx].second.Occupied*Vec_r2Ver[lookupIdx].second.Occupied_backup==0)){
+            if (Vec_r2Ver[lookupIdx].second.Occupied==0){
+                allocatedPtr = Vec_r2Ver[lookupIdx].second.ptr;
+                Vec_r2Ver[lookupIdx].second.Occupied= 1;
+                if (Vec_r2Ver[lookupIdx].second.crossItr==1){
+                    //cout<<"condition M2b "<<allocatedPtr<<endl;
+                    Vec_r2Ver[lookupIdx].second.last_Occupied=1;
+                }
+                Table_p2r[allocatedPtr]=lookupIdx;
+                //cout<<"condition M2 "<<allocatedPtr<<endl;
+                //update load
+                if(loadLogFlag==1){
+                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
+                }
+            }else if ((Vec_r2Ver[lookupIdx].second.crossItr==1) &&          (Vec_r2Ver[lookupIdx].second.Occupied==1) && (Vec_r2Ver[lookupIdx].second.Occupied_backup ==0)) {
+                allocatedPtr = (void*)((char*)Vec_r2Ver[lookupIdx].second.ptr+offsetCrossItr*sizeof(char));
+                Vec_r2Ver[lookupIdx].second.Occupied_backup=1;
+                Vec_r2Ver[lookupIdx].second.last_Occupied=2;
+                Table_p2r[allocatedPtr]=lookupIdx;
+                //cout<<"condition M4 "<<endl;
+                //update load
+                if(loadLogFlag==1){
+                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
+                }
+            }else{
+                //size not proper or both occupied
+                allocatedPtr = malloc(size);
+                //update load
+                if(loadLogFlag==1){
+                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
+                }
+                chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
+                auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+                
+                cout<<gc<<" condition M3 "<<duration<<' '<<Vec_r2Ver[lookupIdx].second.Occupied<<' '<<Vec_r2Ver[lookupIdx].second.Occupied_backup<<endl;
+                }
+        } //c. end of c
     }
-    
     ///4. test repeated sequence every 100 blocks, update globeCounter.
     if (((gc+1)%300==0) && (mallocFlag==0) && (globeCounter==-1)&&(gc+2>checkPoint)){
         cout<<"gc and GC before test: "<<gc<<' '<<globeCounter<<endl;
@@ -706,8 +718,10 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
     
     gc++;
     Table_p2s[allocatedPtr]=size;
+    
     *ptr = allocatedPtr; //TODO(junzhe) verify ptr, allocatedPtr, if pass by reference or not.
 }
+
 
 ///Free
 void SmartMemPool::Free(void* ptr){
@@ -741,26 +755,31 @@ void SmartMemPool::Free(void* ptr){
         auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
         //cout<<gc<<" condition F1 "<<duration<<endl;
     }else{
-        if (!(Table_p2r.find(ptr)==Table_p2r.end())){
+        if (!(Table_p2r.find(ptr)==Table_p2r.end())){ //via Table
             int resp_rIdx = Table_p2r.find(ptr)->second;
             Table_p2r.erase(ptr);
+      
             //b.
-            if (((gc-location)%maxLen == Vec_r2Ver[resp_rIdx].second.d_idx) &&             (ptr == Vec_r2Ver[resp_rIdx].second.ptr) && (Vec_r2Ver[resp_rIdx].second.Occupied == 1)){
-                //update load
-                if(loadLogFlag==1){
-                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second-deallocatedSize);
-                }
+            //c.
+            if (ptr == Vec_r2Ver[resp_rIdx].second.ptr){
                 Vec_r2Ver[resp_rIdx].second.Occupied =0; //freed, able to allocate again.
-                chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-                auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-                //cout<<gc<<" condition F2 "<<duration<<endl;
-            }else{
-                //condition F4
-               Vec_r2Ver[resp_rIdx].second.Occupied =0;
-            
+                //cout<<"condition F2 : primary location"<<endl;
+            }else if (ptr == (void*)((char*)Vec_r2Ver[resp_rIdx].second.ptr+offsetCrossItr*sizeof(char))){
+                Vec_r2Ver[resp_rIdx].second.Occupied_backup =0; //freed, able to allocate again.
+                //cout<<"condition F4 : backup location"<<endl;
+         
+            }else {
+                if (((float)((char*)ptr-((char*)ptrPool+offsetCrossItr*sizeof(char)))>0) && ((float)((char*)ptr-((char*)ptrPool+2*offsetCrossItr*sizeof(char)))<0)){
+                    Vec_r2Ver[resp_rIdx].second.Occupied_backup =0;
+                }else{
+                    Vec_r2Ver[resp_rIdx].second.Occupied =0;
+                }
             }
-            
-        }else{
+            //update load
+            if(loadLogFlag==1){
+                Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second-deallocatedSize);
+            }
+        }else{ // not via Table.
             //update load
             if(loadLogFlag==1){
                 Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first-deallocatedSize,Table_load.find(gc-1)->second.second);
