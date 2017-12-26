@@ -1,10 +1,4 @@
-//
-//  SmartMemPool.hpp
-//  smartMemPool
-//
-//  Created by Junzhe Zhang on 3/12/17.
-//  Copyright © 2017 Junzhe Zhang. All rights reserved.
-//
+
 
 #ifndef SmartMemPool_hpp
 #define SmartMemPool_hpp
@@ -44,27 +38,32 @@ public:
     void Free(void* ptr);
     ~SmartMemPool();
     void getMaxLoad(void);
+    void Test(void);
 private:
     string colorMethod;
     int mallocFlag =0; //0 for cudaMalloc, 1 for coloringMalloc
     int gc =0; //global counter each time Malloc/Free, add 1.
     int globeCounter=-1;
     int loadLogFlag =1; //record when its 1.
-    void* ptrPool = NULL;
+    void* ptrPool_normal = NULL;
+    void* ptrPool_cross =NULL;
     int idxRange = 0;
-    size_t offset = 0;
-    size_t offsetCrossItr=0; //c. cross iteration offset.
+    size_t offset_normal = 0;
+    size_t offset_cross = 0; //c. cross iteration offset.
     int maxLen =0;
     int location=0;
     vector<string> vec;
     map<int,int>Table_r2d; //full duration info, cross-iteration duration.
     map<int,int>Table_d2r;
-    map<int,lookUpElement>Table_r2Ver;
     vector<pair<int,lookUpElement>>Vec_r2Ver; //b.
     map<int, pair<size_t,size_t>>Table_load; //gc, <cudaLoad, colorLoad>
     map<void*,size_t>Table_p2s; //For tracking load in Free. add when allocate, delete when deallocate.
     map<void*,int>Table_p2r; //ptr for arrival idx, for look up Table during free
     int checkPoint=300; //for reduce number of test.
+    int first_location =1 ; // this flag means only the first location for repPatternDetector is reliable.
+    int gc_start_count=0; //
+    int old_location=0;
+    int old_maxLen =0;
 };
 
 

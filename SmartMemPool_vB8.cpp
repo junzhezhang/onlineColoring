@@ -1,10 +1,3 @@
-//
-//  SmartMemPool.cpp
-//  smartMemPool
-//
-//  Created by Junzhe Zhang on 3/12/17.
-//  Copyright © 2017 Junzhe Zhang. All rights reserved.
-//
 
 #include "SmartMemPool.hpp"
 #include<iostream>
@@ -161,6 +154,7 @@ vector<onePieceMsg> strVec_2_pieceMsgVec(vector<string> vec, int &idxRange){
             onePieceMsgVec_.push_back(tempMsg);
         }else {
             cout<<"error for process the onePriceMsg."<<endl;
+            cout<<vec[i]<<endl;
         }
     }
     
@@ -211,9 +205,9 @@ pair<vector<onePairMsg>,vector<onePairMsg>> pieceMsgVec_2_pairOfPairMsgVec(vecto
     pair<vector<onePairMsg>,vector<onePairMsg>>pairOfPairMsgVec_(onePairMsgVec_1,onePairMsgVec_2);
     
     return pairOfPairMsgVec_;
-}//end of pieceMsgVec_2_pairOfPairMsgVec function
+}//end of function
 
-///Section of coloring algorithm. mergeSeg and then FFallocation when building edges of the graph.
+///Section of coloring algorithm. mergeSeg and then FFallocation when building edges of the graph.vec
 vector<pair<size_t, size_t>>  mergeSeg(vector<pair<size_t,size_t>> colorOccupied){
     /*
      version 12/9 11am -- modify to accomodate unsigned int/size_t
@@ -422,7 +416,7 @@ pair<map<int,int>,map<int,int>> cross_itr_durations(vector<string>vec_double, in
 }
 
 /// main run funtion
-vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset, size_t &offsetCrossItr,string colorMethod){ //c.
+vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset_normal, size_t &offset_cross,string colorMethod){ //c.
     /*
      run function, input vector of strings, return colored vertices,
      update idxRange, offset.
@@ -430,21 +424,23 @@ vector<Vertex> run(vector<string>vec, int &idxRange, size_t &offset, size_t &off
      */
     vector<onePieceMsg>onePieceMsgVec_ = strVec_2_pieceMsgVec(vec,idxRange);
     pair<vector<onePairMsg>,vector<onePairMsg>>pairOfPairMsgVec_=pieceMsgVec_2_pairOfPairMsgVec(onePieceMsgVec_,idxRange);
+    //TODO(junzhe) counter verify above here.
     //1. normal blocks 2. cross-iteration blocks.
-    vector<onePairMsg>pairMsgVec_1 = pairOfPairMsgVec_.first;
-    vector<onePairMsg>pairMsgVec_2 = pairOfPairMsgVec_.second;
-  
-    vector<Vertex>vertices_2 = colorSomeVertices(pairMsgVec_2,offset,colorMethod);
-    //c.
-    for (int i=0; i<vertices_2.size();i++){
-        vertices_2[i].crossItr = 1;
+    vector<onePairMsg>pairMsgVec_normal = pairOfPairMsgVec_.first;
+    vector<onePairMsg>pairMsgVec_cross = pairOfPairMsgVec_.second;
+    //cout<<onePieceMsgVec_.size()<<' '<<pairMsgVec_normal.size()<<' '<<pairMsgVec_cross.size()<<endl;
+    vector<Vertex>vertices = colorSomeVertices(pairMsgVec_normal,offset_normal,colorMethod);
+    //if got this group
+    if (pairMsgVec_cross.size()!=0){
+        vector<Vertex>vertices_cross = colorSomeVertices(pairMsgVec_cross,offset_cross,colorMethod);
+        for (int i=0; i<vertices_cross.size();i++){
+            vertices_cross[i].crossItr = 1;
+        }
+        offset_cross = offset_cross*2;
+        //merge
+        vertices.insert(vertices.end(),vertices_cross.begin(),vertices_cross.end());
     }
-    offsetCrossItr = offset;//c.
-    offset = offsetCrossItr*2;//c.
-    vector<Vertex>vertices = colorSomeVertices(pairMsgVec_1,offset,colorMethod);
-    //merge
-    vertices.insert(vertices.end(),vertices_2.begin(),vertices_2.end());
-
+    
     return vertices;
 }
 
@@ -481,51 +477,81 @@ vector<size_t> pairOfPairMsgVec_2_repSeq(pair<vector<onePairMsg>,vector<onePairM
 
     return rep;
 }//end of pairOfPairMsgVec_2_repSeq function
-
-
-vector<size_t> maxRepeatedSeg(vector<size_t>rep, int idxRange, int &maxLen, int &location){
-    /*
-     get max repeated non-overlapping Seg of a vector, return the repeated segment,
-     update maxLen, and location of where Seg starts to repeat.
-     brtue force method using equal()
-     time complexity O(n^2)
-     */
+void repPatternDetector(vector<size_t>rep, int &maxLen, int &location){
+    int idxRange = (int)rep.size();
+    int threshold =50;
+    vector<pair<int,int>>maxLen_location;
+    
     for (int i=0; i<idxRange;i++){
+        if (maxLen>threshold){
+            break;
+        }
         for (int len=1; len<(idxRange-i);len++){
+            if (maxLen>threshold){
+                break;
+            }
             if((equal(rep.begin()+i,rep.begin()+i-1+len,rep.begin()+i+len))&&(maxLen<len)) {
                 maxLen = len;
                 location = i;
-                cout<<"maxLen increased, lcoation and maxLen: ("<<location<<","<<maxLen<<")"<<endl;
+                maxLen_location.push_back(make_pair(maxLen,location));
+//                cout<<"maxLen increased, lcoation and maxLen: ("<<location<<","<<maxLen<<")"<<endl;
             }
         }
     }
-    //TODO(junzhe) verify the subSeq returned, below poped up error in vgg.
-    vector<size_t>subSeq(&rep[location],&rep[location+maxLen]);
-    if(!(equal(rep.begin()+location,rep.begin()+maxLen-1+location,subSeq.begin()) && equal(rep.begin()+location+maxLen,rep.begin()+2*maxLen-1+location,subSeq.begin()))){
-        cout<<"error in get the maxRep"<<endl;
-    }
-    return subSeq;
-}
+}// end of repPatternDetector
+
+//vector<size_t> maxRepeatedSeg(vector<size_t>rep, int idxRange, int &maxLen, int &location){
+//    /*
+//     get max repeated non-overlapping Seg of a vector, return the repeated segment,
+//     update maxLen, and location of where Seg starts to repeat.
+//     brtue force method using equal()
+//     time complexity O(n^2)
+//     */
+//    for (int i=0; i<idxRange;i++){
+//        for (int len=1; len<(idxRange-i);len++){
+//            if((equal(rep.begin()+i,rep.begin()+i-1+len,rep.begin()+i+len))&&(maxLen<len)) {
+//                maxLen = len;
+//                location = i;
+//                cout<<"maxLen increased, lcoation and maxLen: ("<<location<<","<<maxLen<<")"<<endl;
+//            }
+//        }
+//    }
+
+//    vector<size_t>subSeq(&rep[location],&rep[location+maxLen]);
+//    if(!(equal(rep.begin()+location,rep.begin()+maxLen-1+location,subSeq.begin()) && equal(rep.begin()+location+maxLen,rep.begin()+2*maxLen-1+location,subSeq.begin()))){
+//        cout<<"error in get the maxRep"<<endl;
+//    }
+//    return subSeq;
+//}
 
 
-void verifyAndCut (vector<size_t>subSeq, int &maxLen, int &location){
-    /*
-     to cut, in case the repeated Seg contains multiple iterations.
-     */
-    int tempMaxLen=0;
-    int tempLocation =0;
-    int tempIdxRange = maxLen;
-    
-    vector<size_t>tempSubSeq = maxRepeatedSeg(subSeq,tempIdxRange,tempMaxLen, tempLocation);
-    //TODO(junzhe), tunable threshold.
-    int threshold =50;
-    if (tempMaxLen>threshold){
-        maxLen = tempMaxLen;
-        location += tempLocation;
-        cout<<"max length get cut"<<endl;
-    }
-    cout<<tempMaxLen<<endl;
-}
+//void verifyAndCut (vector<size_t>subSeq, int &maxLen, int &location){
+//    /*
+//     to cut, in case the repeated Seg contains multiple iterations.
+//     */
+//    int tempMaxLen=0;
+//    int tempLocation =0;
+//    int tempIdxRange = maxLen;
+//    int threshold =50;
+//    vector<int>maxLenVec;
+//    cout<<" running verify cut"<<endl;
+//    vector<size_t>tempSubSeq = maxRepeatedSeg(subSeq,tempIdxRange,tempMaxLen, tempLocation);
+//    maxLenVec.push_back(tempMaxLen);
+//    cout<<"tempMaxLen is "<<tempMaxLen<<endl;
+//
+//    if (maxLenVec[-1] !=maxLen){
+//        if (tempMaxLen>threshold){
+//            maxLen = tempMaxLen;
+//            location += tempLocation;
+//            cout<<"max length get cut"<<endl;
+//        }
+//        vector<size_t>seq4test (&tempSubSeq[0],&tempSubSeq[tempMaxLen]);
+//        tempSubSeq = maxRepeatedSeg(seq4test,tempIdxRange,tempMaxLen, tempLocation);
+//        maxLenVec.push_back(tempMaxLen);
+//        cout<<"in this loop, tempMaxLen and maxLen "<<tempMaxLen<<' '<<maxLen<<' '<<maxLenVec[-1]<<endl;
+//    }
+//    cout<<"new maxLen:"<<maxLen<<endl;
+//}
 
 
 //main function of test
@@ -540,12 +566,10 @@ int test(vector<string>vec3, int &maxLen, int &location){
     pair<vector<onePairMsg>,vector<onePairMsg>>pairOfPairMsgVec_=pieceMsgVec_2_pairOfPairMsgVec(onePieceMsgVec_3,idxRange3);
     vector<size_t>rep=pairOfPairMsgVec_2_repSeq(pairOfPairMsgVec_);
     
+    repPatternDetector(rep,maxLen,location);
     //get repeated sub vector.
-    vector<size_t>subSeq = maxRepeatedSeg(rep,idxRange3,maxLen,location);
-    //cout<<subSeq.size()<<endl;
-    verifyAndCut(subSeq, maxLen, location);
     int globeCounter=-1;
-    if (maxLen>100){ //TODO(junzhe) tunable threshold.
+    if (maxLen>50){ //TODO(junzhe) tunable threshold.
         cout<<"new location and maxLen: "<<location<<' '<<maxLen<<endl;
         globeCounter = idxRange3+maxLen-(idxRange3-location)%maxLen;
     }
@@ -567,7 +591,6 @@ void overlap_test(vector<Vertex> vertices){
 
 
 SmartMemPool::SmartMemPool(string meth){
-    //TODO(junzhe) to figure out what to do here.
     colorMethod = meth;
 }
 
@@ -579,59 +602,71 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
      3. if flag=1, look up table, malloc/cudaMalloc if not in the Table
      4. test repeated sequence every 100 blocks, update globeCounter.
      */
-    //verify
-//    cout<<"before Malloc: gc  GC idxRange:"<<gc<<' '<<globeCounter<<' '<<idxRange<<endl;
-//    cout<<"maxLen, location and flag: "<<maxLen<<' '<<location<<' '<<mallocFlag<<endl;
-//    cout<<" offset: "<<offset<<endl;
     
     void* allocatedPtr = NULL; //ptr to be returned
-    chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     
     if (gc == globeCounter){
         /// 1. switch flag when gc == globeCounter, construct lookup table and malloc the whole pool.
-        
-        mallocFlag=1;
-        cout<<"switched to color-malloc"<<endl;
-        vector<string>vec_run(&vec[location],&vec[location+maxLen]);
-        
-        vector<Vertex>vertices = run(vec_run, idxRange,offset,offsetCrossItr, colorMethod); //c.
 
-        //here to verify if the coloring got overlapping. TODO(junzhe) optional
-        overlap_test(vertices);
+        mallocFlag=1;
+        offset_normal=0;
+        offset_cross=0;
+        //cout<<gc<<" switched to color-malloc:  "<<endl;
+        //cout<<"vec len here "<<vec.size()<<endl;
+        //cout<<"location and gc_start_count"<<location<<' '<<gc_start_count<<endl;
+        vector<string>vec_run(&vec[location-gc_start_count],&vec[location-gc_start_count+maxLen]);
+        //cout<<"vec_run len "<<vec_run.size()<<' '<<location-gc_start_count<<' '<<location-gc_start_count+maxLen<<endl;
+        vector<Vertex>vertices = run(vec_run, idxRange,offset_normal,offset_cross, colorMethod); //c.
+        //cout<<"run done "<<idxRange<<' '<<offset_normal<<' '<<offset_cross<<endl;
         
-        //obtain the cross-iteration duration info
+        //verify if got overlapping, not work anymore.
+        //overlap_test(vertices);
+
+        //obtain the cross-iteration duration info, TODO verify for test itr.
         int doubleRange=0;
-        vector<string>vec_double(&vec[location],&vec[location+2*maxLen]);
+        vector<string>vec_double(&vec[location-gc_start_count],&vec[location-gc_start_count+2*maxLen]);
         pair<map<int,int>,map<int,int>>pairs =cross_itr_durations(vec_double, location,maxLen,doubleRange);
         Table_r2d = pairs.first;
         Table_d2r = pairs.second;
-        
-        //update ptrPool
-        ptrPool = malloc(offset); //poolSize or memory foot print  offset.
-        cout<<"ptrPool is: "<<ptrPool<<endl;
 
+        //update ptrPool
+        //only once
+        if (ptrPool_cross==NULL){
+            ptrPool_cross = malloc(offset_cross);
+        }
+        //every train/test
+        if (ptrPool_normal!=NULL){
+            free(ptrPool_normal);
+            ptrPool_normal=NULL;
+        }
+        ptrPool_normal = malloc(offset_normal); //poolSize or memory foot print  offset.
+        
         //b.  below 2 loops: vec_r2Ver to replace Table_r2Ver
         for (int i=0; i<idxRange; i++){
             lookUpElement tempElement;
             Vec_r2Ver.push_back(make_pair(i,tempElement));
         }
-        cout<<"now print Vec_r2Ver"<<endl;
-        cout<<"size "<<vertices.size()<<endl;
+        //cout<<"now print Vec_r2Ver"<<endl;
+        //cout<<"size "<<vertices.size()<<endl;
         for (int i=0; i<vertices.size(); i++){
             lookUpElement temp;
             temp.r_idx =vertices[i].r;
             temp.d_idx =Table_r2d.find(vertices[i].r)->second;
             temp.size =vertices[i].size;
             temp.offset=vertices[i].colorRange.first;
-            temp.ptr = (void*)((char*)ptrPool+temp.offset*sizeof(char));
             temp.Occupied =0;
             temp.crossItr = vertices[i].crossItr; //c.
             temp.Occupied_backup =0; //c.
+            if (temp.crossItr==0){
+                temp.ptr = (void*)((char*)ptrPool_normal+temp.offset*sizeof(char));
+            }else{
+                temp.ptr = (void*)((char*)ptrPool_cross+temp.offset*sizeof(char));
+            }
             //build tables for lookup.
             Vec_r2Ver[vertices[i].r].second= temp;
-            cout<<vertices[i].r<<' '<<Vec_r2Ver[vertices[i].r].second.r_idx<<' '<<Vec_r2Ver[vertices[i].r].second.d_idx<<' '<<Vec_r2Ver[vertices[i].r].second.crossItr<<endl;
+            //cout<<vertices[i].r<<' '<<Vec_r2Ver[vertices[i].r].second.r_idx<<' '<<Vec_r2Ver[vertices[i].r].second.d_idx<<' '<<vertices[i].size<<' '<<Vec_r2Ver[vertices[i].r].second.crossItr<<endl;
         }
-        
+        //cout<<gc<<" switched to color-malloc:  completes"<<endl;
     }
     
     if(mallocFlag==0){
@@ -646,6 +681,7 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
                 Table_load[gc]=make_pair(size,0);
             }
         }
+        
         //push_back the string for later test and run.
         string tempStr1 ="Malloc ";
         stringstream strm2;
@@ -656,71 +692,72 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
         string tempStr3 = strm3.str();
         string temp = tempStr1+tempStr2+" "+tempStr3;
         vec.push_back(temp);
-        
-        chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-        cout<<gc<<" condition M1 "<<duration<<endl;
+        //cout<<gc<<" condition M1 "<<endl;
     }else{
-        /// 3. if flag=1, look up table, switch back at last iteration.
+        /// 3. if flag=1, look up table
         int lookupIdx = (gc-location)%maxLen;
-        //b.
-        //c. designed below loop, till the end.
+//        if (gc==globeCounter){
+//            cout<<"just done GC"<<endl;
+//            cout<<Vec_r2Ver[lookupIdx].second.size<<' '<<size<< ' '<<Vec_r2Ver[lookupIdx].second.Occupied<< ' '<<Vec_r2Ver[lookupIdx].second.Occupied_backup<<endl;
+//        }
+
         if ((Vec_r2Ver[lookupIdx].second.size ==size)&&(Vec_r2Ver[lookupIdx].second.Occupied*Vec_r2Ver[lookupIdx].second.Occupied_backup==0)){
             if (Vec_r2Ver[lookupIdx].second.Occupied==0){
                 allocatedPtr = Vec_r2Ver[lookupIdx].second.ptr;
                 Vec_r2Ver[lookupIdx].second.Occupied= 1;
-                if (Vec_r2Ver[lookupIdx].second.crossItr==1){
-                    //cout<<"condition M2b "<<allocatedPtr<<endl;
-                    Vec_r2Ver[lookupIdx].second.last_Occupied=1;
-                }
                 Table_p2r[allocatedPtr]=lookupIdx;
-                cout<<"condition M2 "<<allocatedPtr<<endl;
+                //cout<<gc<<" condition M2 "<<allocatedPtr<<endl;
                 //update load
                 if(loadLogFlag==1){
                     Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
                 }
-            }else if ((Vec_r2Ver[lookupIdx].second.crossItr==1) &&          (Vec_r2Ver[lookupIdx].second.Occupied==1) && (Vec_r2Ver[lookupIdx].second.Occupied_backup ==0)) {
-                allocatedPtr = (void*)((char*)Vec_r2Ver[lookupIdx].second.ptr+offsetCrossItr*sizeof(char));
+            }else{ // here must be crossItr, occupied_backup =0
+                //if ((Vec_r2Ver[lookupIdx].second.crossItr==1) &&          (Vec_r2Ver[lookupIdx].second.Occupied==1) && (Vec_r2Ver[lookupIdx].second.Occupied_backup ==0))
+                allocatedPtr = (void*)((char*)Vec_r2Ver[lookupIdx].second.ptr+offset_cross*sizeof(char));
                 Vec_r2Ver[lookupIdx].second.Occupied_backup=1;
-                Vec_r2Ver[lookupIdx].second.last_Occupied=2;
                 Table_p2r[allocatedPtr]=lookupIdx;
-                cout<<"condition M4 "<<endl;
+                //cout<<gc<<" condition M4 "<<allocatedPtr<<endl;
                 //update load
                 if(loadLogFlag==1){
                     Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first,Table_load.find(gc-1)->second.second+size);
                 }
-            }else{
-                //size not proper or both occupied
-                allocatedPtr = malloc(size);
-                //update load
-                if(loadLogFlag==1){
-                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
-                }
-                chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-                auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-                
-                cout<<gc<<" condition M3 "<<duration<<' '<<Vec_r2Ver[lookupIdx].second.Occupied<<' '<<Vec_r2Ver[lookupIdx].second.Occupied_backup<<endl;
-                }
+            }
         } else{
-            //size not proper or both occupied
-                allocatedPtr = malloc(size);
-                //update load
-                if(loadLogFlag==1){
-                    Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
-                }
-                cout<<"condition M5"<<endl;
+            // size not proper or both occupied,normal train iterations
+            // never falls in here.
+            // falling in here means test iterations.
+            mallocFlag=0;
+            allocatedPtr = malloc(size);
+            //update load
+            if(loadLogFlag==1){
+                Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first+size,Table_load.find(gc-1)->second.second);
+            }
+            //cout<<gc<<" condition M3"<<endl;
+            
+            // clear Tables and vectors for next table build up.
+            //cout<<"size of Table_p2r: "<<Table_p2r.size()<<endl;
+            //Table_p2r no need to clear.
+            vec.clear();
+            Vec_r2Ver.clear();
+            Table_r2d.clear();
+            Table_d2r.clear();
+            Table_p2s.clear();
+            old_location =location;
+            old_maxLen =maxLen;
+            maxLen =0; location = 0;
+            idxRange=0; //TODO(junzhe) verify if needed here.
+            globeCounter = -1;
+            gc_start_count =gc+1;
+            
         }
-    } //c. end of c
-        
+    } //c.
     
     ///4. test repeated sequence every 100 blocks, update globeCounter.
-    if (((gc+1)%300==0) && (mallocFlag==0) && (globeCounter==-1)&&(gc+2>checkPoint)){
-        cout<<"gc and GC before test: "<<gc<<' '<<globeCounter<<endl;
-        globeCounter = test(vec,maxLen,location);
-        checkPoint=checkPoint*2;
+    if (((gc+1)%300==0) && (mallocFlag==0) && (globeCounter==-1)&&(gc+2>checkPoint)&&(vec.size()>100)){
+        Test();
     }
     
-    ///get load info, after gc == GC+2maxLen
+    ///get load info, after gc == GC+2maxLen TODO(junzhe) to make it only once
     if (gc==(globeCounter+2*maxLen)&& (globeCounter>0)){
         getMaxLoad();
         loadLogFlag=0;
@@ -729,23 +766,15 @@ void SmartMemPool::Malloc(void** ptr, size_t size){
     gc++;
     Table_p2s[allocatedPtr]=size;
     
-    *ptr = allocatedPtr; //TODO(junzhe) verify ptr, allocatedPtr, if pass by reference or not.
+    *ptr = allocatedPtr;
 }
 
 
 ///Free
 void SmartMemPool::Free(void* ptr){
-    
-    //verify
-//    cout<<"before Free: gc  GC idxRange:"<<gc<<' '<<globeCounter<<' '<<idxRange<<endl;
-//    cout<<"maxLen, location and flag: "<<maxLen<<' '<<location<<' '<<mallocFlag<<endl;
-//    cout<<" offset: "<<offset<<endl;
-    
+
     size_t deallocatedSize = Table_p2s.find(ptr)->second;
-    
-    chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
-    
-    if ((globeCounter==-1)||(gc<globeCounter)){
+    if (mallocFlag==0){
         //push_back the string for later test and run.
         string tempStr1 ="Free ";
         stringstream strm2;
@@ -754,32 +783,33 @@ void SmartMemPool::Free(void* ptr){
         string temp = tempStr1+tempStr2;
         vec.push_back(temp);
         
+        
         //update load before free
         if(loadLogFlag==1){
             Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first-deallocatedSize,Table_load.find(gc-1)->second.second);
         }
-        /// before flag switch, for sure all free shall be done by free()
-        free(ptr);
-       
-        chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-        cout<<gc<<" condition F1 "<<duration<<endl;
-    }else{
+        if (!(Table_p2r.find(ptr)==Table_p2r.end())){ //via Table
+            Table_p2r.erase(ptr);
+            //cout<<gc<<" condition mixed, before mallocFlag change."<<endl;
+        }else {
+            /// before flag switch, for sure all free shall be done by free()
+            free(ptr);
+            //cout<<gc<<" condition F1 "<<endl;
+        }
+    }else{ //free from Table
         if (!(Table_p2r.find(ptr)==Table_p2r.end())){ //via Table
             int resp_rIdx = Table_p2r.find(ptr)->second;
             Table_p2r.erase(ptr);
       
-            //b.
-            //c.
             if (ptr == Vec_r2Ver[resp_rIdx].second.ptr){
                 Vec_r2Ver[resp_rIdx].second.Occupied =0; //freed, able to allocate again.
-                cout<<"condition F2 : primary location"<<endl;
-            }else if (ptr == (void*)((char*)Vec_r2Ver[resp_rIdx].second.ptr+offsetCrossItr*sizeof(char))){
+                //cout<<gc<<" condition F2 : primary location"<<endl;
+            }else if (ptr == (void*)((char*)Vec_r2Ver[resp_rIdx].second.ptr+offset_cross*sizeof(char))){
                 Vec_r2Ver[resp_rIdx].second.Occupied_backup =0; //freed, able to allocate again.
-                cout<<"condition F4 : backup location"<<endl;
+                //cout<<gc<<" condition F4 : backup location"<<endl;
          
             }else {
-                if (((float)((char*)ptr-((char*)ptrPool+offsetCrossItr*sizeof(char)))>0) && ((float)((char*)ptr-((char*)ptrPool+2*offsetCrossItr*sizeof(char)))<0)){
+                if (((float)((char*)ptr-((char*)ptrPool_cross+offset_cross*sizeof(char)))>0) && ((float)((char*)ptr-((char*)ptrPool_cross+2*offset_cross*sizeof(char)))<0)){
                     Vec_r2Ver[resp_rIdx].second.Occupied_backup =0;
                 }else{
                     Vec_r2Ver[resp_rIdx].second.Occupied =0;
@@ -795,18 +825,23 @@ void SmartMemPool::Free(void* ptr){
                 Table_load[gc]=make_pair(Table_load.find(gc-1)->second.first-deallocatedSize,Table_load.find(gc-1)->second.second);
             }
             free(ptr);
-            chrono::high_resolution_clock::time_point t2= chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-            cout<<gc<<" condition F3 "<<duration<<endl;
+            
+            //cout<<gc<<" condition F3 "<<endl;
         }
     }
+    
+    if (((gc+1)%300==0) && (mallocFlag==0) && (globeCounter==-1)&&(gc+2>checkPoint)&&(vec.size()>100)){
+        Test();
+    }
+    
     gc++;
+    
 }
 
 
 SmartMemPool::~SmartMemPool(){
-    free(ptrPool);
-    //TODO(junzhe) verify what else shall be cleaned up.
+    free(ptrPool_normal);
+    free(ptrPool_cross);
 }
 
 void SmartMemPool::getMaxLoad(){
@@ -827,17 +862,37 @@ void SmartMemPool::getMaxLoad(){
     size_t offsetCudaLoad = Table_load.find(idxMaxColorLoad)->second.first;
     
     size_t maxTotalLoad = max(maxCudaLoad,maxColorLoad+offsetCudaLoad);
-    size_t maxMemUsage = max(maxCudaLoad,offset+offsetCudaLoad);
+    size_t maxMemUsage = max(maxCudaLoad,offset_normal+offset_cross+offsetCudaLoad);
     float memRatio = (float)maxMemUsage/(float)maxTotalLoad;
     
     cout<<"=============================memory usage stats print: ================================"<<endl;
     cout<<"maxColorLoad vs memPoolSize: (at idx "<<idxMaxColorLoad<<")"<<endl;
     cout<<maxColorLoad<<endl;
-    cout<<offset<<endl;
+    cout<<offset_cross+offset_normal<<endl;
     cout<<"maxTotalLoad vs maxCudaLoad(at idx "<<idxMaxCudaLoad<<") maxMemUsage"<<endl;
     cout<<maxTotalLoad<<endl;
     cout<<maxCudaLoad<<endl;
     cout<<maxMemUsage<<endl;
     cout<<"memRatio: "<<memRatio<<endl;
     
+}
+
+void SmartMemPool::Test(){
+    int idxRange3=0; //rename TODO
+    vector<onePieceMsg>onePieceMsgVec_3 =strVec_2_pieceMsgVec(vec,idxRange3);
+    pair<vector<onePairMsg>,vector<onePairMsg>>pairOfPairMsgVec_=pieceMsgVec_2_pairOfPairMsgVec(onePieceMsgVec_3,idxRange3);
+    vector<size_t>rep=pairOfPairMsgVec_2_repSeq(pairOfPairMsgVec_);
+    repPatternDetector(rep,maxLen,location);
+    if (maxLen>50){
+        if (first_location == 1){//location, GC reliable at first test.
+            first_location=0;
+        }else{
+            location = gc_start_count+(maxLen-(gc_start_count-old_location)%old_maxLen);
+        }
+        globeCounter =maxLen-(gc+1-location)%maxLen+gc+1;
+    }
+
+    //cout<<"test done: gc, GC, gc_start_count location, maxLen, vec len,"<<endl;
+    //cout<<gc<<' '<< globeCounter<<' '<<gc_start_count<<' '<<location<<' '<< maxLen<<' '<<vec.size()<<endl;
+    //checkPoint=checkPoint*2;//d. do it every 300 TODO(junzhe)
 }

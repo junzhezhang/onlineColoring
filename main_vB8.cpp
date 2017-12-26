@@ -1,10 +1,3 @@
-//
-//  main.cpp
-//  smartMemPool
-//
-//  Created by Junzhe Zhang on 3/12/17.
-//  Copyright © 2017 Junzhe Zhang. All rights reserved.
-//
 
 #include <iostream>
 #include <chrono>
@@ -57,7 +50,12 @@ int main() {
     // get the simulation input from text file, select one for testing.
     //string fileName ="memInfo_alex_20itr_100size.text";
     //string fileName ="memInfo_vgg_20itr_100size.text";
-    string fileName ="memInfo_resnet_20itr_100size.text";
+    //string fileName ="memInfo_resnet_20itr_100size.text";
+    
+    //string fileName ="memInfo_alex_20_20_3.text";
+    //string fileName ="memInfo_vgg_20_20_3.text";
+    string fileName ="memInfo_resnet_20_20_3.text";
+    
     vector<string>vec = file_2_strVec(fileName);
     cout<<"size of vec: "<<vec.size()<<endl;
     cout<<"example of one vec string"<<endl;
@@ -65,6 +63,7 @@ int main() {
     cout<<vec[45]<<endl;
 
     int testNum = static_cast<int>(vec.size());
+    //testNum =3773+800;
     map<string,void*>mapFptr_Rptr; //map fake to real address, for simulation purpose.
     
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
@@ -105,7 +104,7 @@ int main() {
     //cout<<"total time is "<<tic-toc<<endl;
     chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-    cout<<"total time is "<<duration<<" (in micronseconds)"<<endl;
+    cout<<"total time is "<<duration<<" (in microseconds)"<<endl;
     return 0;
 }
 
