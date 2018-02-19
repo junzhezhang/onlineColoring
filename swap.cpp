@@ -290,11 +290,12 @@ struct less_than_Idx{
     }
 };
 
-void compute_peak(vector<onePieceMsg> vec_run, int& max_Idx, size_t& max_Load ){
+vector<double> compute_peak(vector<onePieceMsg> vec_run, int& max_Idx, size_t& max_Load ){
     //sort by idx
     int maxIdx =0;
     size_t maxLoad =0;
     size_t load=0;
+    vector<double>vec_load;
     cout<<"================================ print vec_run idx=========="<<endl;
     for (int i=0; i<vec_run.size(); i++){
         //cout<<vec_run[i].idx<<" "<<vec_run[i].MallocFree<<" "<<vec_run[i].size<<endl;
@@ -307,10 +308,12 @@ void compute_peak(vector<onePieceMsg> vec_run, int& max_Idx, size_t& max_Load ){
             maxLoad =load;
             maxIdx = i;
         }
+        vec_load.push_back(load);
         //cout<<"load "<<i<<' '<<load<<" mallocFree: "<<vec_run[i].MallocFree<<endl;
     }
     max_Idx = maxIdx;
     max_Load = maxLoad;
+    return vec_load;
 }
 
 int SwapInTime(size_t size){
@@ -394,6 +397,31 @@ struct less_than_Idx_Swap_rvs{
         return (struct1.d_idx>struct2.d_idx);
     }
 };
+
+int load_over_limit(vector<double>vec_load, size_t memLimit, int old_idx){
+    //TODO(junzhe) reduce time complexity
+    for (int i = old_idx; i<vec_load.size();i++){
+        if (vec_load[i]>=memLimit){
+            return i;
+        }
+    }
+    return static_cast<int>(vec_load.size()); //TODO(junzhe) to reset between comp t1' and t2'
+}
+
+
+void load_update(vector<double>& vec_load,int old_idx, int plusMinus, size_t size){
+    for (int i = old_idx; i<vec_load.size();i++){
+        //cout<<"plusMinus "<<plusMinus<<endl;
+        if (plusMinus ==1){
+            //cout<<"yes its 1"<<endl;
+            vec_load[i]=vec_load[i]+static_cast<double>(size);
+        } else {
+            //cout<<"no its not 1"<<endl;
+            vec_load[i]=vec_load[i]-static_cast<double>(size);
+        }
+    }
+}
+
 int main() {
     ///load blockInfo
     string fileName = "blockInfo_6_itr_time_Alex.text";
@@ -440,17 +468,13 @@ int main() {
     ///get peak and idx
     int maxIdx =0;
     size_t maxLoad =0;
-    compute_peak(vec_run, maxIdx, maxLoad);
+    vector<double>vec_load = compute_peak(vec_run, maxIdx, maxLoad); //vec_load correct
+
     cout<<"maxIdx and maxLoad are: "<<maxIdx<<' '<<maxLoad<<endl; //144443088
-    size_t memUsage = 25000000; //75% of the maxLoad, for example.
+    size_t memLimit = 20000000; //75% of the maxLoad, for example.
     //sort by ptr & idx
     sort(vec_run.begin(),vec_run.end(),less_than_ptrIdx());
     //TODO(junzhe) pay attention, idx is from 1200. in order of idx
-    for (int i =1; i<vec_run.size();i++){
-//        cout<<vec_run[i].ptr<<' '<<vec_run[i].idx<<' '<<vec_run[i].MallocFree<<' '<<vec_run[i].size<<' '<<vec_run[i].t<<endl;
-//        cout<<vec_run[i].t-vec_run[i-1].t<<endl;
-        //above shows the timestamps are correct.
-    }
     //feed in one iteration
     int L_out = SwapOutTime(0);
     int L_in = SwapInTime(0);
@@ -466,17 +490,15 @@ int main() {
             tempSwap.dt = tempSwap.d_time-tempSwap.r_time-SwapOutTime(tempSwap.size)-SwapOutTime(tempSwap.size);
             tempSwap.dt_p = tempSwap.dt - L_out - L_in;
             tempSwap.pri = tempSwap.dt * tempSwap.size;
-            //cout<<"delta idx and delta time: "<<vec_run[i].idx-vec_run[i-1].idx<<' '<<vec_run[i].t-vec_run[i-1].t<<endl;
-            //cout<<tempSwap.d_time-tempSwap.r_time<<endl; //TODO(junzhe) verify. t.
-            //onePairMsg_Swap(string p, size_t s, int i1, int i2, int t1, int t2): ptr(p), size(s), r_idx(r),d_idx(d),r_time(t1), d_time(t2) {}
-            //cout<<tempSwap.size<<' '<<tempSwap.r_idx<<' '<<tempSwap.d_idx<<"||"<<tempSwap.r_time<<' '<<tempSwap.d_time<<"||"<<tempSwap.dt_o<<' '<<tempSwap.dt<<' '<<tempSwap.dt_p<<endl;
             ///print
-            cout<<tempSwap.size<<' '<<tempSwap.r_idx<<' '<<tempSwap.d_idx<<"||"<<tempSwap.dt<<' '<<tempSwap.pri<<endl;
+            //cout<<tempSwap.size<<' '<<tempSwap.r_idx<<' '<<tempSwap.d_idx<<"||"<<tempSwap.dt<<' '<<tempSwap.pri<<endl;
             //TODO(junzhe) all positve here.
             vec_swap.push_back(tempSwap);
             sumSizeSwap+=tempSwap.size;
         }
     }
+
+
     ///select the top a few that can meet swap load
     //TODO(junzhe) optimize the for loop.
     cout<<"============== select top a few to swap"<<endl;
@@ -484,7 +506,7 @@ int main() {
     vector<onePairMsg_Swap>vec_swap_selct;
     size_t sumSizeSwap2=0;
     for (int i =0; i<vec_swap.size(); i++){
-        if (sumSizeSwap2<memUsage){
+        if (sumSizeSwap2<memLimit){
             vec_swap_selct.push_back(vec_swap[i]);
             sumSizeSwap2+=vec_swap[i].size;
             //cout<<vec_swap[i].size<<' '<<vec_swap[i].r_idx<<' '<<vec_swap[i].d_idx<<"||"<<vec_swap[i].dt<<' '<<vec_swap[i].pri<<endl;
@@ -494,10 +516,14 @@ int main() {
             break;
         }
     }
+
     ///planing the swap at point of time.
     cout<<"===========================planning the swap idx"<<endl;
+    double overhead=0;
+    int old_idx=0; //book keep where the load track is.
     sort(vec_swap_selct.begin(),vec_swap_selct.end(),less_than_Idx_Swap());
     sort(vec_run.begin(),vec_run.end(),less_than_Idx());
+
     ///t1 and t1', i1 and i1'
     for (int i =0; i<vec_swap_selct.size(); i++){
         int tempIdx=vec_swap_selct[i].r_idx;
@@ -514,41 +540,74 @@ int main() {
         vec_swap_selct[i].i1=vec_run[tempIdx].idx;
         vec_swap_selct[i].t1=vec_run[tempIdx].t;
         vec_swap_selct[i].t1p = vec_swap_selct[i].t1+SwapOutTime(vec_swap_selct[i].size);
-        //update i1'
+        //update i1', compare with last swap and load
         while ((vec_swap_selct[i].t1p>=vec_run[tempIdx].t) or ((vec_run[tempIdx].MallocFree!=1) and (vec_run[tempIdx].MallocFree!=-1))) {
             tempIdx++; //TODO(junzhe) can speed up
         }
-        vec_swap_selct[i].i1p = tempIdx;//Note: here i1' is immediately at Malloc/Free.
+        //udpate i1', look at when over limit.
+        old_idx = load_over_limit(vec_load,memLimit,old_idx);
+        if (old_idx<tempIdx){
+            //over limit before tempIdx, got overhead
+            vec_swap_selct[i].i1p = old_idx;
+            overhead+=(vec_swap_selct[i].t1p-vec_run[old_idx].t);
+            load_update(vec_load,old_idx,-1,vec_swap_selct[i].size);
+        } else {
+            vec_swap_selct[i].i1p = tempIdx;//Note: here i1' is immediately at Malloc/Free.
+            load_update(vec_load,tempIdx,-1,vec_swap_selct[i].size);
+        }
+        cout<<"old_idx and i1p: "<<old_idx<<' '<<tempIdx<<' '<<vec_swap_selct[i].r_idx<<' '<<vec_run[old_idx].MallocFree<<" overhead "<<overhead<<endl;
+        
     } //for loop
     
-    ///t2 and t2', i2 and i2'
+    ///t2 and t2', i2 and i2', TODO(junzhe) verify
     sort(vec_swap_selct.begin(),vec_swap_selct.end(),less_than_Idx_Swap_rvs());
-    double overhead=0;
+    ///step 1: overlap with next swapIn.
     for (int i =0; i<vec_swap_selct.size(); i++){
-        int tempIdx=vec_swap_selct[i].d_idx;
-        double tempTime;
-        //condition
+        int tempIdx=vec_swap_selct[i].d_idx; //idx at which to be used.
+        double tempTime; //time need to be swapped in start.
+        //condition, if overlap tempIdx late than next i2p, pull in swap in.
         if ((i>0) and (tempIdx>vec_swap_selct[i-1].i2p)){
             tempIdx = vec_swap_selct[i-1].i2p;
             tempTime = vec_run[tempIdx].t - SwapInTime(vec_swap_selct[i].size);
         } else{
             tempTime = vec_swap_selct[i].d_time - SwapInTime(vec_swap_selct[i].size);
         }
-        //update i2p, t2p; not used for i2 and t2.
+        
+        //update i2p, t2p; not used for i2 and t2, with wait_till_aval function at data()
+        vec_swap_selct[i].i2 = tempIdx;
         while ((tempTime<=vec_run[tempIdx].t) or ((vec_run[tempIdx].MallocFree!=1) and (vec_run[tempIdx].MallocFree!=-1))) {
             tempIdx--; //TODO(junzhe) can speed up
         }
-        vec_swap_selct[i].i2p = vec_run[tempIdx].idx;
-        vec_swap_selct[i].t2p = vec_run[tempIdx].t;
+        vec_swap_selct[i].i2p = tempIdx;
+        vec_swap_selct[i].t2p = tempTime; //Note here use tempTime
     }
-    
+    cout<<"total overhead: "<<overhead<<endl;
+    ///step 2: change i2p to load exceeds limit, with overhead.
+    //verify TODO(junzhe)
+    for (int i = static_cast<int>(vec_swap_selct.size()-1);i>=0; i--){
+        old_idx = vec_swap_selct[i].i2p;
+        load_update(vec_load,vec_swap_selct[i].i2p, 1,vec_swap_selct[i].size);
+        old_idx = load_over_limit(vec_load,memLimit,old_idx);
+        if (old_idx< vec_run.size()) {
+            while (vec_load[old_idx]>memLimit){
+                old_idx++;
+            }
+            //restore the update if there is over the limit
+            load_update(vec_load,vec_swap_selct[i].i2p,-1,vec_swap_selct[i].size);
+            //reapply to the just nice idx.
+            load_update(vec_load,old_idx,1,vec_swap_selct[i].size);
+            vec_swap_selct[i].i2p = old_idx;
+            overhead+=(vec_run[old_idx].t-vec_swap_selct[i].t2p);
+            cout<<"overhead "<<vec_run[old_idx].t-vec_swap_selct[i].t2p<<endl;
+        }
+    }
+    cout<<"total overhead: "<<overhead<<endl;
     cout<<"size of Vec_run is: "<<vec_run.size()<<endl;
     cout<<"size of vec_swap is: "<<vec_swap.size()<<endl;
     cout<<"size of sumSwap is: "<<sumSizeSwap<<endl;
     cout<<"size of maxload is: "<<maxLoad<<endl;
-
     cout<<"done"<<endl;
-    
+
 
     
     return 0;
